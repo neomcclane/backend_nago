@@ -1,0 +1,667 @@
+from django.http import JsonResponse, Http404, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render_to_response
+from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.core import serializers
+from django.contrib import auth
+from . import models
+from django.conf import settings
+
+import base64
+import random 
+import json
+import sys
+import os
+
+NUM_CODE = 4
+
+def method_post(funcion):
+	def decorador(*args, **kwargs):
+		if args[0].method != "POST":
+			return HttpResponse(json.dumps('false'), content_type='application/json')
+		else:
+			return funcion(*args, **kwargs)
+
+	return decorador
+
+def code_generator(n=5):
+	# code = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789_!@#&/'
+	code = '0123456789'
+	code_final = ''
+	for i in list(range(n)):
+		code_final += code[random.randint(0, len(code)-1)]
+
+	return code_final
+
+def exist_username(username):
+	if len(User.objects.filter(username=username)) > 0: return True
+	else: return False
+
+def exist_email(email):
+	if len(User.objects.filter(email=email)) > 0: return True
+	else: return False
+
+def exist_email_my(email, id):
+
+	if len(User.objects.filter(email=email).exclude(id=id)) > 0: 
+		return True
+	else: 
+		return False
+
+def title_text(text):
+	list_text = text.split(' ')
+	text_final = ''
+	for t in list(range(len(list_text))):
+		if t != 0:
+			text_final += ' '+list_text[t].title()
+		else:
+			text_final += list_text[t].title()
+
+	return text_final
+
+def is_friend(id_person, id_friend):
+	response = 'false'
+	
+	if len(models.Friend.objects.filter(fk_person=id_person, fk_person_friend=id_friend, state=1)) > 0:
+		response = 'true'
+
+	return response
+
+def exist_id_person(id):
+	if len(models.Person.objects.filter(id=id)) > 0: return True
+	else: return False
+
+def exclude_friends(id, persons):
+	persons_finally = []
+	insert = True
+	friends = models.Friend.objects.filter(fk_person=id, state=1)
+	
+	if len(friends) > 0:
+		for person in persons:
+			for friend in friends:
+				if friend.fk_person_friend.id == person.id:
+					insert = False
+					break
+			
+			if insert:		
+				persons_finally.append(person)
+			else:
+				insert = not insert
+
+		return persons_finally
+	else:
+		return persons
+
+def validate_args(*args, **kwargs):
+	for i in list(args[1:len(args)]):
+		if i not in args[0].POST:
+			return False
+
+	return True
+
+def validate_request_loan(person_id):
+	if len(models.Request_Loans.objects.filter(fk_person__id=int(person_id), state=True)) > 0:
+		return False
+
+	return True
+
+def have_friends(person_id):
+	if len(models.Friend.objects.filter(fk_person__id=int(person_id), state=1)) > 0:
+		return True
+	return False
+
+def filterUser(users):
+	result = []
+	for user in users:
+		result.append(models.Person.objects.get(fk_user=user))
+
+	print(result)
+	return result
+
+# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
+@csrf_exempt
+@method_post
+def register(request):
+	response = 'false'
+
+	if validate_args(request, 'name', 'lastname','username', 'email', 'password', 'app') and not exist_username(request.POST['username']): #and (not exist_email(request.POST['email']))
+		response = 'true'
+		root = User.objects.create_user(username=request.POST['username'], password=request.POST['password'], email=request.POST['email'].lower())
+		root.save()
+		pin = code_generator(NUM_CODE)
+		person = models.Person(fk_user=root, name=request.POST['name'], lastname=request.POST['lastname'], num_visit=0, pin=pin)
+		if 'img_profile' in request.FILES:
+			person.img_profile = request.FILES['img_profile']
+		else:
+			person.img_profile = '/profile/user.png'
+
+		person.save()
+		text_email = '<h2>Code: </h2>'+pin
+		try:
+			send_mail('Code', 'no-reply@gmail.com', 'no-reply@gmail.com', [request.POST['email'].lower()], html_message=text_email,fail_silently=False)
+		except:
+			pass	
+		
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def login(request):
+	response = {}
+
+	if validate_args(request, 'username', 'password', 'app') and (auth.authenticate(username=request.POST['username'], password=request.POST['password']) is not None):
+		person = models.Person.objects.get(fk_user=User.objects.get(username=request.POST['username']))
+		response['id'] = person.id
+		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+		response['username'] = person.fk_user.username
+		response['name'] = person.name
+		response['lastname'] = person.lastname
+		response['telephone'] = person.telephone
+		if person.birthdate is not None:
+			response['birthdate'] = person.birthdate.strftime('%Y/%m/%d')
+		else:
+			response['birthdate'] = ""
+		response['email'] = person.fk_user.email
+		if person.description == None:
+			response['description'] = ' '
+		else:
+			response['description'] = person.description
+		response['available'] = 0
+		response['locked'] = 0
+		response['invest'] = 0
+		response['num_visit'] = person.num_visit
+		person.num_visit += 1
+		person.save()
+
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def editProfile(request):
+	response = False
+	
+	if validate_args(request, 'username', 'name', 'lastname','email', 'app') and len(User.objects.filter(username=request.POST['username'])) > 0:# and (not exist_email_my(request.POST['email'], User.objects.get(username=request.POST['username']).id)):
+		response = True
+		root = User.objects.get(username=request.POST['username'])
+		root.email = request.POST['email']
+		root.save()
+		person = models.Person.objects.get(fk_user=root)
+		person.name = request.POST['name']
+		person.lastname = request.POST['lastname']
+		
+		# person.birthdate = request.POST['birthdate']
+
+		if 'description' in request.POST:
+			person.description = request.POST['description']
+
+		if 'telephone' in request.POST:
+			person.telephone = request.POST['telephone']
+
+		if 'birthdate' in request.POST and len(request.POST['birthdate']) > 4:
+			person.birthdate = request.POST['birthdate']
+
+		person.save()
+
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def existUsername(request):
+	response = False
+
+	if validate_args(request, 'username', 'app') and len(User.objects.filter(username=request.POST['username'])) > 0:
+		response = True
+
+	return HttpResponse(json.dumps(response), content_type='applicaction/json')
+
+@csrf_exempt
+@method_post
+def existEmail(request):
+	response = False
+
+	if validate_args(request, 'email', 'app') and len(User.objects.filter(email=request.POST['email'])) > 0:
+		response = True
+
+	return HttpResponse(json.dumps(response), content_type='applicaction/json')
+
+@csrf_exempt
+@method_post
+def sendEmailCode(request):
+	response = False
+
+	if validate_args(request, 'email') and exist_email(request.POST['email']):
+		text_email = '<h2>Code: </h2>'+str(code_generator(5))
+		try:
+			send_mail('Code', 'no-reply@gmail.com', 'no-reply@gmail.com', [request.POST['email'].lower()], html_message=text_email,fail_silently=False)
+		except:
+			response = False
+		else:
+			response = True
+	
+	return HttpResponse(json.dumps(response), content_type='applicaction/json')
+
+@csrf_exempt
+@method_post
+def viewNagoUsers(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app') and exist_id_person(int(request.POST['id'])):
+		if len(models.Person.objects.all().exclude(id=int(request.POST['id']))) <= int(request.POST['num_end']):
+			persons = models.Person.objects.all().exclude(id=int(request.POST['id'])).order_by('id')[int(request.POST['num_ini']):int(request.POST['num_end'])]
+		else:
+			persons = models.Person.objects.all().exclude(id=int(request.POST['id'])).order_by('id')[int(request.POST['num_ini']):]
+
+		persons = exclude_friends(int(request.POST['id']), persons)
+
+		for person in persons:
+			data = {}
+			data['id_person'] = person.id 
+
+			try:
+				data['img_profile'] = person.img_profile.url
+			except:
+				data['img_profile'] = person.img_profile
+
+			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			data['description'] = person.description 
+			data['is_friend'] = is_friend(int(request.POST['id']), person.id)
+			response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def viewProfileSelf(request):
+	response = {}
+	if validate_args(request, 'id', 'app') and exist_id_person(int(request.POST['id'])):
+		person = models.Person.objects.get(id=int(request.POST['id']))
+		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+		response['name'] = person.name
+		response['lastname'] = person.lastname
+		response['telephone'] = person.telephone
+		if person.birthdate is not None:
+			response['birthdate'] = person.birthdate.strftime('%Y/%m/%d')
+		else:
+			response['birthdate'] = ""
+		response['email'] = person.fk_user.email
+		if person.description is not None:
+			response['description'] = person.description
+		else:
+			response['description'] = ""
+		
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def viewProfileUser(request):
+	response = {}
+
+	if validate_args(request, 'id', 'user_id', 'app') and exist_id_person(int(request.POST['user_id'])):
+		person = models.Person.objects.get(id=int(request.POST['user_id']))
+		response['user_id'] = person.id
+		response['username'] = person.fk_user.username
+		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+		response['name'] = person.name
+		response['lastname'] = person.lastname
+		response['telephone'] = person.telephone
+		response['email'] = person.fk_user.email
+		if person.description is not None:
+			response['description'] = person.description
+		else:
+			response['description'] = ""
+		response['ranking'] = 0 # validar el ranking
+		response['is_friend'] = is_friend(int(request.POST['id']), person.id)
+
+	return HttpResponse(json.dumps(response), 'application/json')
+
+@csrf_exempt
+@method_post
+def sendInvitationFriend(request):
+	response = False
+
+	if validate_args(request, 'id', 'user_invitation_id', 'app') and exist_id_person(int(request.POST['id'])) and exist_id_person(int(request.POST['user_invitation_id'])):
+		if len(models.Friend.objects.filter(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']))) == 0:
+			person = models.Person.objects.get(id=int(request.POST['id']))
+			friend = models.Person.objects.get(id=int(request.POST['user_invitation_id']))
+			friends = models.Friend(fk_person=person, fk_person_friend=friend, state=0, asked=True)
+			friends.save()
+			friends = models.Friend(fk_person=friend, fk_person_friend=person, state=0, asked=False)
+			friends.save()
+			response = True
+		
+		elif len(models.Friend.objects.filter(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=2)) == 1:
+			friends_0 = models.Friend.objects.get(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=2)
+			friends_0.asked = True
+			friends_0.state = 0
+			friends_0.save()
+
+			friends_1 = models.Friend.objects.get(fk_person_friend=int(request.POST['id']), fk_person=int(request.POST['user_invitation_id']), state=2)
+			friends_1.asked = False
+			friends_1.state = 0
+			friends_1.save()
+			response = True
+
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def invitationViewFriends(request):
+	response = {}
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app'):
+		if len(models.Friend.objects.filter(fk_person=int(request.POST['id']), state=0)) <= int(request.POST['num_end']):
+			friends = models.Friend.objects.filter(fk_person=int(request.POST['id']), state=0, asked=False)[int(request.POST['num_ini']):int(request.POST['num_end'])]
+		else:
+			friends = models.Friend.objects.filter(fk_person=int(request.POST['id']), state=0, asked=False)[int(request.POST['num_ini']):]
+
+		response['users'] = []
+
+		for friend in friends:
+			person = models.Person.objects.get(id=friend.fk_person_friend.id)
+			data = {}
+			data['user_invitation_id'] = person.id
+			
+			try:
+				data['img_profile'] = person.img_profile.url
+			except:
+				data['img_profile'] = person.img_profile
+
+			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			data['username'] = person.fk_user.username
+			data['description'] = person.description
+			response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewMyFriends(request):
+	response = {}
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app'):
+		if len(models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1)) <= int(request.POST['num_end']):
+			friends = models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1)[int(request.POST['num_ini']):int(request.POST['num_end'])]
+		else:
+			friends = models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1)[int(request.POST['num_ini']):]
+
+		response['users'] = []
+
+		for friend in friends:
+			person = models.Person.objects.get(id=friend.fk_person_friend.id)
+			data = {}
+			data['user_invitation_id'] = person.id
+			
+			try:
+				data['img_profile'] = person.img_profile.url
+			except:
+				data['img_profile'] = person.img_profile
+
+			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			data['username'] = person.fk_user.username
+			data['description'] = person.description
+			response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewProfileFriend(request):
+	response = {}
+
+	if validate_args(request, 'id', 'friend_id', 'app') and len(models.Friend.objects.filter(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['friend_id']), state=1)) > 0: 
+		friend = models.Person.objects.get(id=int(request.POST['friend_id']))
+		response['friend_id'] = friend.id
+		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+		response['username'] = friend.fk_user.username
+		response['email'] = friend.fk_user.email
+		response['description'] = friend.description
+		response['ranking'] = 0
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def responseInvitationFriendAccept(request):
+	response = False
+
+	if validate_args(request, 'id', 'user_invitation_id', 'app'):
+		friends_0 = models.Friend.objects.filter(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=0)
+		friends_1 = models.Friend.objects.filter(fk_person=int(request.POST['user_invitation_id']), fk_person_friend=int(request.POST['id']), state=0)
+		if len(friends_0) > 0 and len(friends_1) > 0:
+			try:
+				friend_0 = models.Friend.objects.get(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=0)
+				friend_0.state = 1; 
+				friend_0.save()
+
+				friend_1 = models.Friend.objects.get(fk_person=int(request.POST['user_invitation_id']), fk_person_friend=int(request.POST['id']), state=0)
+				friend_1.state = 1; 
+				friend_1.save()
+			except:
+				pass
+			else:
+				response = True
+	
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def responseInvitationFriendCancel(request):
+	response = False
+
+	if validate_args(request, 'id', 'user_invitation_id', 'app'):
+		friends_0 = models.Friend.objects.filter(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=0)
+		friends_1 = models.Friend.objects.filter(fk_person=int(request.POST['user_invitation_id']), fk_person_friend=int(request.POST['id']), state=0)
+		if len(friends_0) > 0 and len(friends_1) > 0:
+			try:
+				friend_0 = models.Friend.objects.get(fk_person=int(request.POST['id']), fk_person_friend=int(request.POST['user_invitation_id']), state=0)
+				friend_0.state = 2; 
+				friend_0.save()
+
+				friend_1 = models.Friend.objects.get(fk_person=int(request.POST['user_invitation_id']), fk_person_friend=int(request.POST['id']), state=0)
+				friend_1.state = 2; 
+				friend_1.save()
+			except:
+				pass
+			else:
+				response = True
+	
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def validateCode(request):
+	response = False
+
+	if validate_args(request, 'id', 'code', 'app') and exist_id_person(int(request.POST['id'])):
+		person = models.Person.objects.get(id=int(request.POST['id']))
+		person.code = code_generator()
+		person.save()
+		response = True
+
+	return HttpResponse(json.dumps(response), 'contet-type/json')
+
+@csrf_exempt
+@method_post
+def loanSolicitude(request):
+	response = False
+
+	if validate_args(request, 'id', 'amount_request', 'amount_available', 'interest', 'date_return', 'date_expiration', 'commentary', 'app') and validate_request_loan(request.POST['id']) and have_friends(request.POST['id']):
+		response = True
+		request_loans = models.Request_Loans()
+		request_loans.amount_request = request.POST['amount_request']
+		request_loans.amount_available = request.POST['amount_available']
+		request_loans.interest = request.POST['interest']
+		request_loans.date_return = request.POST['date_return']
+		request_loans.date_expiration = request.POST['date_expiration']
+		request_loans.commentary = request.POST['commentary']
+		request_loans.fk_person = models.Person.objects.get(id=int(request.POST['id']))
+		request_loans.save()
+
+		for friend in models.Friend.objects.filter(fk_person_friend__id=int(request.POST['id']), state=1):
+			friends_loans = models.Friends_Loans(fk_request_loans=request_loans, fk_friends=friend)
+			friends_loans.save()
+	
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewFriendsLoans(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app'):
+		
+		for friend in models.Friend.objects.filter(fk_person__id=int(request.POST['id']), state=1):
+			friends_loans = models.Friends_Loans.objects.filter(fk_friends=friend, state=False)
+			if len(friends_loans) > 0:
+				friends_loans = friends_loans[0]
+				data = {}
+				person = models.Person.objects.get(id=friend.fk_person_friend.id)
+				data['id'] = person.id
+				try: 
+					data['img_profile'] = person.img_profile.url
+				except: 
+					data['img_profile'] = person.img_profile
+				data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+				data['comment'] = friends_loans.fk_request_loans.commentary
+				data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
+				data['date_return'] = str(friends_loans.fk_request_loans.date_return.year)+'-'+str(friends_loans.fk_request_loans.date_return.month)+'-'+str(friends_loans.fk_request_loans.date_return.day)
+				data['amount_request'] = friends_loans.fk_request_loans.amount_request
+				data['amount_available'] = friends_loans.fk_request_loans.amount_available
+				data['interest'] = friends_loans.fk_request_loans.interest
+				response['users'].append(data)
+
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewLoanFriend(request):
+	response = {}
+
+	if validate_args(request, 'id', 'user_id', 'app'):
+		try:
+			request_loans = models.Request_Loans.objects.get(fk_person__id=int(request.POST['user_id']), state=True)
+			person = models.Person.objects.get(id=int(request.POST['user_id']))
+			friends = models.Friend.objects.get(fk_person__id=int(request.POST['id']), fk_person_friend__id=int(request.POST['user_id']), state=1)
+		except:
+			pass
+		else:
+			response['user_id'] = person.id
+			response['loan_id'] = models.Friends_Loans.objects.get(fk_friends=friends, fk_request_loans=request_loans).id
+			response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			response['comment'] = request_loans.commentary
+			response['description'] = person.description
+			response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
+			response['date_return'] = str(request_loans.date_return.year)+'-'+str(request_loans.date_return.month)+'-'+str(request_loans.date_return.day)
+			response['date_create'] = str(request_loans.date_create.year)+'-'+str(request_loans.date_create.month)+'-'+str(request_loans.date_create.day)
+			response['interest'] = request_loans.interest
+			response['invertors'] = 0
+			response['amount_request'] = request_loans.amount_request
+			response['amount_available'] = request_loans.amount_available
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def payLoanFriend(request):
+	response = False
+	if validate_args(request, 'id', 'loan_id', 'amount_loan', 'amount_interest', 'app'):
+		try:
+			friends_loans = models.Friends_Loans.objects.get(id=int(request.POST['loan_id']), state=False)
+			friends_loans.state = True
+			friends_loans.save()
+			loan = models.Loans()
+		except:
+			pass
+		else:
+			response = True
+			loan.fk_friend_loans = friends_loans
+			loan.amount_loan = request.POST['amount_loan']
+			loan.amount_interest = request.POST['amount_interest']
+			loan.save()
+
+	return HttpResponse(json.dumps(response), 'context-type/json')
+
+@csrf_exempt
+@method_post
+def viewFriendsLoansPay(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app'):
+		
+		for friend in models.Friend.objects.filter(fk_person__id=int(request.POST['id']), state=1):
+			friends_loans = models.Friends_Loans.objects.filter(fk_friends=friend, state=True)
+			if len(friends_loans) > 0:
+				friends_loans = friends_loans[0]
+				data = {}
+				person = models.Person.objects.get(id=friend.fk_person_friend.id)
+				laon = models.Loans.objects.get(fk_friend_loans=friends_loans)
+				data['id'] = person.id
+				try: 
+					data['img_profile'] = person.img_profile.url
+				except: 
+					data['img_profile'] = person.img_profile
+
+				data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+				data['comment'] = friends_loans.fk_request_loans.commentary
+				data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
+				data['date_return'] = str(friends_loans.fk_request_loans.date_return.year)+'-'+str(friends_loans.fk_request_loans.date_return.month)+'-'+str(friends_loans.fk_request_loans.date_return.day)
+				data['amount_request'] = friends_loans.fk_request_loans.amount_request
+				data['amount_available'] = friends_loans.fk_request_loans.amount_available
+				data['amount_loan'] = laon.amount_loan
+				data['amount_interest'] = laon.amount_interest
+				data['interest'] = friends_loans.fk_request_loans.interest
+				response['users'].append(data)
+
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+# -------------------------------------------------------------------------
+
+@csrf_exempt
+@method_post
+def userNagoFilter(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'username','app') and exist_id_person(int(request.POST['id'])):
+		list_person = models.User.objects.filter(username__startswith=str(request.POST['username']).lower())
+		persons = filterUser(list_person)
+		# persons = models.User.objects.filter(fk_user__username=str(request.POST['username']))
+		persons = exclude_friends(int(request.POST['id']), persons)
+
+		for person in persons:
+			data = {}
+			data['id_person'] = person.id 
+
+			try:
+				data['img_profile'] = person.img_profile.url
+			except:
+				data['img_profile'] = person.img_profile
+
+			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			data['description'] = person.description 
+			data['is_friend'] = is_friend(int(request.POST['id']), person.id)
+			response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), content_type='application/json')
+
+@csrf_exempt
+@method_post
+def validatePin(request):
+	response = False
+	print(request.POST['pin'])
+
+	if validate_args(request, 'id', 'pin','app') and len(models.Person.objects.filter(id=int(request.POST['id']), pin=str(request.POST['pin']))) > 0:
+		response = True
+		print('entro')
+		
+	return HttpResponse(json.dumps(response), content_type='applicaction/json')
