@@ -7,6 +7,7 @@ from django.core import serializers
 from django.contrib import auth
 from . import models
 from django.conf import settings
+from datetime import datetime, timedelta
 
 import base64
 import random 
@@ -140,6 +141,8 @@ def register(request):
 			person.img_profile = '/profile/user.png'
 
 		person.save()
+		account = models.Account(fk_person=person, amount_available=float(0), amount_locked=float(0))
+		account.save()
 		text_email = '<h2>Code: </h2>'+pin
 		try:
 			send_mail('Code', 'no-reply@gmail.com', 'no-reply@gmail.com', [request.POST['email'].lower()], html_message=text_email,fail_silently=False)
@@ -155,6 +158,7 @@ def login(request):
 
 	if validate_args(request, 'username', 'password', 'app') and (auth.authenticate(username=request.POST['username'], password=request.POST['password']) is not None):
 		person = models.Person.objects.get(fk_user=User.objects.get(username=request.POST['username']))
+		account = models.Account.objects.get(fk_person=person)
 		response['id'] = person.id
 		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
 		response['username'] = person.fk_user.username
@@ -171,8 +175,9 @@ def login(request):
 		else:
 			response['description'] = person.description
 		response['available'] = 0
-		response['locked'] = 0
-		response['invest'] = 0
+
+		response['locked'] = account.amount_locked
+		response['invest'] = account.amount_available
 		response['num_visit'] = person.num_visit
 		person.num_visit += 1
 		person.save()
@@ -268,7 +273,10 @@ def viewNagoUsers(request):
 				data['img_profile'] = person.img_profile
 
 			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
-			data['description'] = person.description 
+			if person.description is None:
+				data['description'] = ""
+			else:	
+				data['description'] = person.description 
 			data['is_friend'] = is_friend(int(request.POST['id']), person.id)
 			response['users'].append(data)
 
@@ -374,7 +382,11 @@ def invitationViewFriends(request):
 
 			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
 			data['username'] = person.fk_user.username
-			data['description'] = person.description
+			if person.description is None:
+				data['description'] = ""
+			else:
+				data['description'] = person.description
+
 			response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
@@ -404,7 +416,10 @@ def viewMyFriends(request):
 
 			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
 			data['username'] = person.fk_user.username
-			data['description'] = person.description
+			if person.description is not None:
+				data['description'] = person.description
+			else:
+				data['description'] = ""
 			response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
@@ -491,13 +506,13 @@ def validateCode(request):
 def loanSolicitude(request):
 	response = False
 
-	if validate_args(request, 'id', 'amount_request', 'amount_available', 'interest', 'date_return', 'date_expiration', 'commentary', 'app') and validate_request_loan(request.POST['id']) and have_friends(request.POST['id']):
+	if validate_args(request, 'id', 'amount_request', 'interest', 'date_return', 'date_expiration', 'commentary', 'app') and validate_request_loan(request.POST['id']) and have_friends(request.POST['id']):
 		response = True
 		request_loans = models.Request_Loans()
 		request_loans.amount_request = request.POST['amount_request']
-		request_loans.amount_available = request.POST['amount_available']
-		request_loans.interest = request.POST['interest']
-		request_loans.date_return = request.POST['date_return']
+		request_loans.amount_available = 0
+		request_loans.interest = float(request.POST['interest'])
+		request_loans.date_return = int(request.POST['date_return'])
 		request_loans.date_expiration = request.POST['date_expiration']
 		request_loans.commentary = request.POST['commentary']
 		request_loans.fk_person = models.Person.objects.get(id=int(request.POST['id']))
@@ -531,7 +546,7 @@ def viewFriendsLoans(request):
 				data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
 				data['comment'] = friends_loans.fk_request_loans.commentary
 				data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
-				data['date_return'] = str(friends_loans.fk_request_loans.date_return.year)+'-'+str(friends_loans.fk_request_loans.date_return.month)+'-'+str(friends_loans.fk_request_loans.date_return.day)
+				data['date_return'] = friends_loans.fk_request_loans.date_return
 				data['amount_request'] = friends_loans.fk_request_loans.amount_request
 				data['amount_available'] = friends_loans.fk_request_loans.amount_available
 				data['interest'] = friends_loans.fk_request_loans.interest
@@ -559,7 +574,7 @@ def viewLoanFriend(request):
 			response['comment'] = request_loans.commentary
 			response['description'] = person.description
 			response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
-			response['date_return'] = str(request_loans.date_return.year)+'-'+str(request_loans.date_return.month)+'-'+str(request_loans.date_return.day)
+			response['date_return'] = request_loans.date_return
 			response['date_create'] = str(request_loans.date_create.year)+'-'+str(request_loans.date_create.month)+'-'+str(request_loans.date_create.day)
 			response['interest'] = request_loans.interest
 			response['invertors'] = 0
@@ -648,7 +663,11 @@ def userNagoFilter(request):
 				data['img_profile'] = person.img_profile
 
 			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
-			data['description'] = person.description 
+			if person.description is not None:
+				data['description'] = person.description 
+			else:
+				data['description'] = ""
+
 			data['is_friend'] = is_friend(int(request.POST['id']), person.id)
 			response['users'].append(data)
 

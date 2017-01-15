@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 import os
 import sys
 
+# NAME = "myproject"
 NAME = "nago"
 DIR = os.path.abspath(sys.path[0]).replace('\\', '/')
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -80,14 +81,12 @@ WSGI_APPLICATION = NAME+'.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        # 'NAME': 'nagodb',
         'NAME': 'nago_server',
         # 'USER': 'nago',
         'USER': 'postgres',
         'PASSWORD': '123456',
-        # Aurora_091
-        # 'PASSWORD': 'Aurora_091',
-        # 'HOST': '75.126.137.86',
+        # 'PASSWORD': 'aurora_091',
+        # 'HOST': '207.38.86.11',
         'HOST':'127.0.0.1',
         'PORT': '5432',
     }

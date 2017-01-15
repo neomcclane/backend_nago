@@ -37,7 +37,7 @@ class Request_Loans(models.Model):
 	amount_request = models.FloatField(null=False, blank=False)
 	amount_available = models.FloatField(null=False, blank=False)
 	interest = models.FloatField(null=False, blank=False)
-	date_return = models.DateField(null=False, blank=False)
+	date_return = models.IntegerField(null=False, blank=False)
 	date_expiration = models.DateField(null=False, blank=False)
 	date_create = models.DateField(auto_now_add=True)
 	commentary = models.CharField(max_length=150, null=False, blank=False)
@@ -63,4 +63,9 @@ class Notification(models.Model):
 	fk_friends = models.ForeignKey(Friend, null=True, blank=True)
 	fk_loans = models.ForeignKey(Loans, null=True, blank=True)
 	fk_request_loans = models.ForeignKey(Request_Loans, null=True, blank=True)
+	fk_person = models.ForeignKey(Person, null=False, blank=False)
+
+class Account(models.Model):
+	amount_available = models.FloatField(null=False, blank=False) 
+	amount_locked = models.FloatField(null=False, blank=False) 
 	fk_person = models.ForeignKey(Person, null=False, blank=False)
