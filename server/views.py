@@ -160,7 +160,7 @@ def register(request):
 				person.img_profile = '/profile/user.png'
 
 			person.save()
-			account = models.Account(fk_person=person, amount_available=float(0), amount_locked=float(0), amount_invested=float(0))
+			account = models.Account(fk_person=person, amount_available=float(2000), amount_locked=float(0), amount_invested=float(0))
 			account.save()
 			response = True
 		except Exception as e:
@@ -200,6 +200,7 @@ def login(request):
 			response['available'] = 0			
 		response['locked'] = account.amount_locked
 		response['invest'] = account.amount_invested
+		response['available'] = account.amount_available
 		response['num_visit'] = person.num_visit
 		person.num_visit += 1
 		person.save()
@@ -541,7 +542,8 @@ def validateCode(request):
 @method_post
 def loanSolicitude(request):
 	response = False
-	if validate_args(request, 'id', 'amount_request', 'interest', 'date_return', 'date_expiration', 'commentary', 'app') and validate_request_loan(request.POST['id']) and have_friends(request.POST['id']):
+	print('deadline: '+str(request.POST['deadline']) )
+	if validate_args(request, 'id', 'amount_request', 'interest', 'date_return', 'deadline', 'date_expiration', 'commentary', 'app') and validate_request_loan(request.POST['id']) and have_friends(request.POST['id']):
 		response = True
 		request_loans = models.Request_Loans()
 		request_loans.amount_request = request.POST['amount_request']
@@ -550,6 +552,7 @@ def loanSolicitude(request):
 		request_loans.date_return = int(request.POST['date_return'].split(' ')[0])
 		request_loans.date_expiration = request.POST['date_expiration']
 		request_loans.commentary = request.POST['commentary']
+		request_loans.deadline = request.POST['deadline']
 		request_loans.fk_person = models.Person.objects.get(id=int(request.POST['id']))
 		request_loans.save()
 
@@ -611,6 +614,7 @@ def viewHistoryDetail(request):
 			response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 			response['amount_request'] = request_loans.amount_request
 			response['amount_available'] = request_loans.amount_available
+			response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
 	
 	return HttpResponse(json.dumps(response), 'content-type/json')
 
@@ -638,6 +642,7 @@ def viewExpectedProfile(request):
 				data['amount_loan'] = 0
 				data['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 				data['id_history'] = request_loans.id
+				data['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
 
 				response['users'].append(data)
 	print(response)
@@ -710,6 +715,8 @@ def viewLoanFriend(request):
 
 	if validate_args(request, 'id', 'user_id', 'app'):
 		try:
+			person_self = models.Person.objects.get(id=int(request.POST['id']))
+			account = models.Account.objects.get(fk_person=person_self)
 			request_loans = models.Request_Loans.objects.get(fk_person__id=int(request.POST['user_id']), state=True)
 			person = models.Person.objects.get(id=int(request.POST['user_id']))
 			friends = models.Friend.objects.get(fk_person__id=int(request.POST['id']), fk_person_friend__id=int(request.POST['user_id']), state=1)
@@ -727,9 +734,16 @@ def viewLoanFriend(request):
 			response['interest'] = request_loans.interest
 			response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 			response['amount_request'] = request_loans.amount_request
-			response['amount_request_bar'] = request_loans.amount_request - request_loans.amount_available
+			if account.amount_available >= request_loans.amount_request:
+				response['amount_request_bar'] = int(request_loans.amount_request)
+			else:
+				response['amount_request_bar'] = int(account.amount_available)
+		
 			response['amount_available'] = request_loans.amount_available
+			response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
 			
+
+	print('amount_request_bar: '+str(response['amount_request_bar']))		
 	return HttpResponse(json.dumps(response), 'content-type/json')
 
 @csrf_exempt

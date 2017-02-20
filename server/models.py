@@ -39,6 +39,7 @@ class Request_Loans(models.Model):
 	interest = models.FloatField(null=False, blank=False)
 	date_return = models.IntegerField(null=False, blank=False)
 	date_expiration = models.DateField(null=False, blank=False)
+	deadline = models.DateField(null=False, blank=False)
 	date_create = models.DateField(auto_now_add=True)
 	commentary = models.CharField(max_length=150, null=False, blank=False)
 	state = models.BooleanField(default=True)
