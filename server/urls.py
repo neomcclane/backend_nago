@@ -27,6 +27,10 @@ urlpatterns = [
     url(r'^viewProfileSelf/', views.viewProfileSelf, name='viewProfileSelf'),
     url(r'^userNagoFilter/', views.userNagoFilter, name='userNagoFilter'),
     url(r'^validatePin/', views.validatePin, name='validatePin'),
+    url(r'^viewHistoryProfile/', views.viewHistoryProfile, name='viewHistoryProfile'),
+    url(r'^viewHistoryDetail/', views.viewHistoryDetail, name='viewHistoryDetail'),
+    url(r'^lendingSolicitude/', views.lendingSolicitude, name='lendingSolicitude'),
+    url(r'^viewExpectedProfile/', views.viewExpectedProfile, name='viewExpectedProfile'),
     
 
 

@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 import os
 import sys
 
-# NAME = "myproject"
+#NAME = "myproject"
 NAME = "nago"
 DIR = os.path.abspath(sys.path[0]).replace('\\', '/')
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -82,11 +82,11 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': 'nago_server',
-        # 'USER': 'nago',
+        #'USER': 'nago',
         'USER': 'postgres',
         'PASSWORD': '123456',
-        # 'PASSWORD': 'aurora_091',
-        # 'HOST': '207.38.86.11',
+        #'PASSWORD': 'aurora_091',
+        #'HOST': '207.38.86.11',
         'HOST':'127.0.0.1',
         'PORT': '5432',
     }
@@ -134,8 +134,8 @@ MEDIA_URL = '/media/'
 # MEDIA_ROOT = '/home/vitoandolini/webapps/nagoapp/myproject/media/'
 MEDIA_ROOT = DIR+'/media/'
 
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = 'aquilobuscas@gmail.com'
-EMAIL_HOST_PASSWORD = 'aurora_091'
-EMAIL_PORT = 587
+EMAIL_HOST = 'smtp.webfaction.com'
+EMAIL_HOST_USER = 'mandala_email'
+EMAIL_HOST_PASSWORD = 'Vito_Corleone0'
+EMAIL_PORT = '587'
 EMAIL_USE_TLS = True
