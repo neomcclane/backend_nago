@@ -126,6 +126,7 @@ def addDate(fday, fdate):
 	result = datetime.strptime(fdate.strftime('%Y-%m-%d'), '%Y-%m-%d') + timedelta(days=fday)
 	return result
 
+
 # -------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------
@@ -134,7 +135,6 @@ def addDate(fday, fdate):
 @method_post
 def register(request):
 	response = False
-
 	if validate_args(request, 'name', 'lastname','username', 'email', 'password', 'app') and not exist_username(request.POST['username']): #and (not exist_email(request.POST['email']))
 		try:
 			
@@ -837,7 +837,194 @@ def lendingSolicitude(request):
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
 
+@csrf_exempt
+@method_post
+def viewAmountMarket(request):
+	response = {}
+	response['users'] = []
 
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'tipo', 'app') and exist_id_person(int(request.POST['id'])):
+		num_ini = int(request.POST['num_ini'])
+		num_end = int(request.POST['num_end'])
+		
+		if int(request.POST['tipo']) == 1:
+			tipo = 'amount_request'
+			print('mayor amount')
+		else:
+			tipo = '-amount_request'
+			print('menor amount')
+
+		if num_end < len(models.Request_Loans.objects.all()):
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+		else:
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+		
+		for request_loan in requests_loans:
+			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
+				if len(models.Friends_Loans.objects.filter(fk_request_loans=request_loan, fk_friends=friend)) > 0:
+					friends_loans = models.Friends_Loans.objects.get(fk_request_loans=request_loan, fk_friends=friend)
+					person = models.Person.objects.get(id=friend.fk_person_friend.id)
+					data = {}
+					data['id'] = person.id
+					try: 
+						data['img_profile'] = person.img_profile.url
+					except: 
+						data['img_profile'] = person.img_profile
+					data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+					data['comment'] = friends_loans.fk_request_loans.commentary
+					data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
+					data['date_return'] = friends_loans.fk_request_loans.date_return
+					data['amount_request'] = friends_loans.fk_request_loans.amount_request
+					data['amount_available'] = friends_loans.fk_request_loans.amount_available
+					data['interest'] = friends_loans.fk_request_loans.interest
+					response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewInterestMarket(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'tipo', 'app') and exist_id_person(int(request.POST['id'])):
+		num_ini = int(request.POST['num_ini'])
+		num_end = int(request.POST['num_end'])
+		
+		if int(request.POST['tipo']) == 1:
+			tipo = 'interest'
+			print('mayor interest')
+		else:
+			tipo = '-interest'
+			print('menor interest')
+
+		if num_end < len(models.Request_Loans.objects.all()):
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+		else:
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+		
+		for request_loan in requests_loans:
+			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
+				if len(models.Friends_Loans.objects.filter(fk_request_loans=request_loan, fk_friends=friend)) > 0:
+					friends_loans = models.Friends_Loans.objects.get(fk_request_loans=request_loan, fk_friends=friend)
+					person = models.Person.objects.get(id=friend.fk_person_friend.id)
+					data = {}
+					data['id'] = person.id
+					try: 
+						data['img_profile'] = person.img_profile.url
+					except: 
+						data['img_profile'] = person.img_profile
+					data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+					data['comment'] = friends_loans.fk_request_loans.commentary
+					data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
+					data['date_return'] = friends_loans.fk_request_loans.date_return
+					data['amount_request'] = friends_loans.fk_request_loans.amount_request
+					data['amount_available'] = friends_loans.fk_request_loans.amount_available
+					data['interest'] = friends_loans.fk_request_loans.interest
+					response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewDeadlineMarket(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'tipo', 'app') and exist_id_person(int(request.POST['id'])):
+		num_ini = int(request.POST['num_ini'])
+		num_end = int(request.POST['num_end'])
+		
+		if int(request.POST['tipo']) == 1:
+			tipo = 'deadline'
+			print('mayor deadline')
+		else:
+			tipo = '-deadline'
+			print('menor deadline')
+
+		if num_end < len(models.Request_Loans.objects.all()):
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+		else:
+			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+		
+		for request_loan in requests_loans:
+			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
+				if len(models.Friends_Loans.objects.filter(fk_request_loans=request_loan, fk_friends=friend)) > 0:
+					friends_loans = models.Friends_Loans.objects.get(fk_request_loans=request_loan, fk_friends=friend)
+					person = models.Person.objects.get(id=friend.fk_person_friend.id)
+					data = {}
+					data['id'] = person.id
+					try: 
+						data['img_profile'] = person.img_profile.url
+					except: 
+						data['img_profile'] = person.img_profile
+					data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+					data['comment'] = friends_loans.fk_request_loans.commentary
+					data['date_expiration'] = str(friends_loans.fk_request_loans.date_expiration.year)+'-'+str(friends_loans.fk_request_loans.date_expiration.month)+'-'+str(friends_loans.fk_request_loans.date_expiration.day)
+					data['date_return'] = friends_loans.fk_request_loans.date_return
+					data['amount_request'] = friends_loans.fk_request_loans.amount_request
+					data['amount_available'] = friends_loans.fk_request_loans.amount_available
+					data['interest'] = friends_loans.fk_request_loans.interest
+					response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewRequestedAccount(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app') and exist_id_person(int(request.POST['id'])):
+		person = models.Person.objects.get(id=int(request.POST['id']))
+		for request_loan in models.Request_Loans.objects.filter(fk_person=person).order_by('state'):
+			data = {}
+			data['id'] = person.id
+			try: 
+				data['img_profile'] = person.img_profile.url
+			except: 
+				data['img_profile'] = person.img_profile
+			data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+			data['comment'] = request_loan.commentary
+			data['date_expiration'] = str(request_loan.date_expiration.year)+'-'+str(request_loan.date_expiration.month)+'-'+str(request_loan.date_expiration.day)
+			data['date_return'] = request_loan.date_return
+			data['amount_request'] = request_loan.amount_request
+			data['amount_available'] = request_loan.amount_available
+			data['interest'] = request_loan.interest
+			
+			response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewInvestedAccount(request):
+	response = {}
+	response['users'] = []
+
+	if validate_args(request, 'id', 'num_ini', 'num_end', 'app') and exist_id_person(int(request.POST['id'])):
+		person_id = models.Person.objects.get(id=int(request.POST['id']))
+		for request_loan in models.Request_Loans.objects.filter().exclude(fk_person=person_id).order_by('state'):
+			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id'])):
+				if len(models.Friends_Loans.objects.filter(fk_friends=friend, fk_request_loans=request_loan)) > 0:
+					person = models.Person.objects.get(id=request_loan.fk_person.id)
+					data = {}
+					data['id'] = person.id
+					try: 
+						data['img_profile'] = person.img_profile.url
+					except: 
+						data['img_profile'] = person.img_profile
+					data['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+					data['comment'] = request_loan.commentary
+					data['date_expiration'] = str(request_loan.date_expiration.year)+'-'+str(request_loan.date_expiration.month)+'-'+str(request_loan.date_expiration.day)
+					data['date_return'] = request_loan.date_return
+					data['amount_request'] = request_loan.amount_request
+					data['amount_available'] = request_loan.amount_available
+					data['interest'] = request_loan.interest
+					
+					response['users'].append(data)
+
+	return HttpResponse(json.dumps(response), 'content-type/json')
 # -------------------------------------------------------------------------
 
 @csrf_exempt

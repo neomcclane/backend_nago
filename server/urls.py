@@ -31,6 +31,11 @@ urlpatterns = [
     url(r'^viewHistoryDetail/', views.viewHistoryDetail, name='viewHistoryDetail'),
     url(r'^lendingSolicitude/', views.lendingSolicitude, name='lendingSolicitude'),
     url(r'^viewExpectedProfile/', views.viewExpectedProfile, name='viewExpectedProfile'),
+    url(r'^viewAmountMarket/', views.viewAmountMarket, name='viewAmountMarket'),
+    url(r'^viewInterestMarket/', views.viewInterestMarket, name='viewInterestMarket'),
+    url(r'^viewDeadlineMarket/', views.viewDeadlineMarket, name='viewDeadlineMarket'),
+    url(r'^viewRequestedAccount/', views.viewRequestedAccount, name='viewRequestedAccount'),
+    url(r'^viewInvestedAccount/', views.viewInvestedAccount, name='viewInvestedAccount'),
     
 
 
