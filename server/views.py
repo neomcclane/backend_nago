@@ -808,11 +808,10 @@ def lendingSolicitude(request):
 	response = {}
 	response['error'] = True
 
+	print('interest: '+str(request.POST['interest']))
+	print('amount: '+str(request.POST['amount']))
+	
 	if validate_args(request, 'id', 'id_loand', 'interest','amount', 'app'):
-		print('id: '+str(request.POST['id']))
-		print('id_loand: '+str(request.POST['id_loand']))
-		print('amount: '+str(request.POST['amount']))
-		print('interest: '+str(request.POST['interest']))
 		friend_loans = models.Friends_Loans.objects.get(id=int(request.POST['id_loand']))
 		friend_loans.state = True
 		friend_loans.save()
@@ -826,9 +825,12 @@ def lendingSolicitude(request):
 
 		account = models.Account.objects.get(fk_person__id=request.POST['id'])
 		account.amount_available -= float('{0:.2f}'.format(float(request.POST['amount'])))
-		account.amount_locked += float('{0:.2f}'.format(float(request.POST['amount'])))
 		account.amount_invested += float('{0:.2f}'.format(float(request.POST['amount'])))
 		account.save()
+
+		accout_person = models.Account.objects.get(fk_person__id=int(request.POST['id_loand']))
+		accout_person.amount_locked += float('{0:.2f}'.format(float(request.POST['amount'])))
+		accout_person.save()
 
 		response['amount_available'] = account.amount_available
 		response['amount_invested'] = account.amount_available
@@ -1006,7 +1008,7 @@ def viewInvestedAccount(request):
 		person_id = models.Person.objects.get(id=int(request.POST['id']))
 		for request_loan in models.Request_Loans.objects.filter().exclude(fk_person=person_id).order_by('state'):
 			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id'])):
-				if len(models.Friends_Loans.objects.filter(fk_friends=friend, fk_request_loans=request_loan)) > 0:
+				if len(models.Friends_Loans.objects.filter(fk_friends=friend, fk_request_loans=request_loan, state=True)) > 0:
 					person = models.Person.objects.get(id=request_loan.fk_person.id)
 					data = {}
 					data['id'] = person.id
@@ -1025,6 +1027,57 @@ def viewInvestedAccount(request):
 					response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
+
+@csrf_exempt
+@method_post
+def viewRequestdUser(request):
+	response = {}
+	
+	if validate_args(request, 'id', 'id_user', 'app') and exist_id_person(int(request.POST['id'])):
+		person = models.Person.objects.get(id=int(request.POST['id']))
+		request_loans = models.Request_Loans.objects.get(fk_person=person)
+		
+		response['id'] = person.id
+		response['fullname'] = str(person.name).capitalize()+' '+str(person.lastname).capitalize()
+		response['comment'] = str(request_loans.commentary)
+		response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
+		date_return = addDate(request_loans.date_return, request_loans.date_expiration)
+		response['date_return'] = str(date_return.year)+'-'+str(date_return.month)+'-'+str(date_return.day)
+		response['date_return_day'] = request_loans.date_return
+		response['amount_request'] = request_loans.amount_request
+		response['amount_available'] = request_loans.amount_available
+		response['amount_loan'] = 0
+		response['interest'] = request_loans.interest
+		response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
+		response['id_history'] = request_loans.id
+		
+	return HttpResponse(json.dumps(response), 'content_type/json')
+
+@csrf_exempt
+@method_post
+def viewInvestedUser(request):
+	response = {}
+
+	if validate_args(request, 'id', 'id_user', 'app') and exist_id_person(int(request.POST['id'])):
+		person = models.Person.objects.get(id=int(request.POST['id_user']))
+		request_loans = models.Request_Loans.objects.get(fk_person=person)
+		
+		response['id'] = person.id
+		response['fullname'] = str(person.name).capitalize()+' '+str(person.lastname).capitalize()
+		response['comment'] = str(request_loans.commentary)
+		response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
+		date_return = addDate(request_loans.date_return, request_loans.date_expiration)
+		response['date_return'] = str(date_return.year)+'-'+str(date_return.month)+'-'+str(date_return.day)
+		response['date_return_day'] = request_loans.date_return
+		response['amount_request'] = request_loans.amount_request
+		response['amount_available'] = request_loans.amount_available
+		response['amount_loan'] = 0
+		response['interest'] = request_loans.interest
+		response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
+		response['id_history'] = request_loans.id
+		
+	return HttpResponse(json.dumps(response), 'content_type/json')
+
 # -------------------------------------------------------------------------
 
 @csrf_exempt

@@ -36,6 +36,8 @@ urlpatterns = [
     url(r'^viewDeadlineMarket/', views.viewDeadlineMarket, name='viewDeadlineMarket'),
     url(r'^viewRequestedAccount/', views.viewRequestedAccount, name='viewRequestedAccount'),
     url(r'^viewInvestedAccount/', views.viewInvestedAccount, name='viewInvestedAccount'),
+    url(r'^viewRequestdUser/', views.viewRequestdUser, name='viewRequestdUser'),
+    url(r'^viewInvestedUser/', views.viewInvestedUser, name='viewInvestedUser'),
     
 
 
