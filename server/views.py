@@ -993,6 +993,7 @@ def viewRequestedAccount(request):
 			data['amount_request'] = request_loan.amount_request
 			data['amount_available'] = request_loan.amount_available
 			data['interest'] = request_loan.interest
+			data['return_day'] = request_loan.date_return
 			
 			response['users'].append(data)
 
@@ -1022,6 +1023,7 @@ def viewInvestedAccount(request):
 					data['date_return'] = request_loan.date_return
 					data['amount_request'] = request_loan.amount_request
 					data['amount_available'] = request_loan.amount_available
+					data['return_day'] = request_loan.date_return
 					data['interest'] = request_loan.interest
 					
 					response['users'].append(data)
@@ -1050,6 +1052,8 @@ def viewRequestdUser(request):
 		response['interest'] = request_loans.interest
 		response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 		response['id_history'] = request_loans.id
+		response['return_day'] = request_loans.date_return
+		response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
 		
 	return HttpResponse(json.dumps(response), 'content_type/json')
 
@@ -1075,6 +1079,8 @@ def viewInvestedUser(request):
 		response['interest'] = request_loans.interest
 		response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 		response['id_history'] = request_loans.id
+		response['return_day'] = request_loans.date_return
+		response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
 		
 	return HttpResponse(json.dumps(response), 'content_type/json')
 
