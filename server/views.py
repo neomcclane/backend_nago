@@ -734,8 +734,8 @@ def viewLoanFriend(request):
 			response['interest'] = request_loans.interest
 			response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
 			response['amount_request'] = request_loans.amount_request
-			if account.amount_available >= request_loans.amount_request:
-				response['amount_request_bar'] = int(request_loans.amount_request)
+			if account.amount_available >= request_loans.amount_request - request_loans.amount_available:
+				response['amount_request_bar'] = int(request_loans.amount_request- request_loans.amount_available)
 			else:
 				response['amount_request_bar'] = int(account.amount_available)
 		
@@ -828,7 +828,8 @@ def lendingSolicitude(request):
 		account.amount_invested += float('{0:.2f}'.format(float(request.POST['amount'])))
 		account.save()
 
-		accout_person = models.Account.objects.get(fk_person__id=int(request.POST['id_loand']))
+		person_so = models.Person.objects.get(id=request_loans.fk_person.id)
+		accout_person = models.Account.objects.get(fk_person=person_so)
 		accout_person.amount_locked += float('{0:.2f}'.format(float(request.POST['amount'])))
 		accout_person.save()
 
