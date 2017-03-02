@@ -126,6 +126,37 @@ def addDate(fday, fdate):
 	result = datetime.strptime(fdate.strftime('%Y-%m-%d'), '%Y-%m-%d') + timedelta(days=fday)
 	return result
 
+def updateSolicitudes():
+	for request_loans in models.Request_Loans.objects.filter(state=True):
+		date_expired = request_loans.date_expiration
+		date_today = datetime.now().strftime('%Y-%m-%d')
+		print('date_expired: '+str(date_expired))
+		print('date_today: '+date_today)
+		if (str(date_expired) < str(date_today)) or  (request_loans.amount_available >= request_loans.amount_request):
+			updateLoansProcess(request_loans)
+
+def updateLoansProcess(request_loans):
+	print('entro aqui!')
+	request_loans.state = False
+	request_loans.save()
+
+	person_solicitud = models.Person.objects.get(id=request_loans.fk_person.id)
+
+	account_solicitud = models.Account.objects.get(fk_person=person_solicitud)
+	account_solicitud.amount_available += account_solicitud.amount_locked
+	account_solicitud.amount_locked = 0
+	account_solicitud.save()
+
+	for friend_loan in models.Friends_Loans.objects.filter(fk_request_loans=request_loans):
+		loan = models.Loans.objects.get(fk_friend_loans=friend_loan)
+		loan.state = True
+		loan.save()
+		amount = loan.amount_loan
+		friend = models.Friend.objects.get(id=friend_loan.fk_friends.id)
+		person_invest = models.Person.objects.get(id=friend.fk_person.id)
+		account_invest = models.Account.objects.get(fk_person=person_invest)
+		account_invest.amount_invested = 0
+		account_invest.save()
 
 # -------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------
@@ -174,7 +205,7 @@ def register(request):
 @method_post
 def login(request):
 	response = {}
-
+	updateSolicitudes()
 	if validate_args(request, 'username', 'password', 'app') and (auth.authenticate(username=request.POST['username'], password=request.POST['password']) is not None):
 		person = models.Person.objects.get(fk_user=User.objects.get(username=request.POST['username']))
 		account = models.Account.objects.get(fk_person=person)
@@ -202,6 +233,7 @@ def login(request):
 		response['invest'] = account.amount_invested
 		response['available'] = account.amount_available
 		response['num_visit'] = person.num_visit
+		
 		person.num_visit += 1
 		person.save()
 
@@ -708,42 +740,39 @@ def viewInvesteds(request):
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
 
+
 @csrf_exempt
 @method_post
 def viewLoanFriend(request):
 	response = {}
 
 	if validate_args(request, 'id', 'user_id', 'app'):
-		try:
-			person_self = models.Person.objects.get(id=int(request.POST['id']))
-			account = models.Account.objects.get(fk_person=person_self)
-			request_loans = models.Request_Loans.objects.get(fk_person__id=int(request.POST['user_id']), state=True)
-			person = models.Person.objects.get(id=int(request.POST['user_id']))
-			friends = models.Friend.objects.get(fk_person__id=int(request.POST['id']), fk_person_friend__id=int(request.POST['user_id']), state=1)
-		except:
-			pass
-		else:
-			response['user_id'] = person.id
-			response['loan_id'] = models.Friends_Loans.objects.get(fk_friends=friends, fk_request_loans=request_loans).id
-			response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
-			response['comment'] = request_loans.commentary
-			response['description'] = person.description
-			response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
-			response['date_return'] = request_loans.date_return
-			response['date_create'] = str(request_loans.date_create.year)+'-'+str(request_loans.date_create.month)+'-'+str(request_loans.date_create.day)
-			response['interest'] = request_loans.interest
-			response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
-			response['amount_request'] = request_loans.amount_request
-			if account.amount_available >= request_loans.amount_request - request_loans.amount_available:
-				response['amount_request_bar'] = int(request_loans.amount_request- request_loans.amount_available)
-			else:
-				response['amount_request_bar'] = int(account.amount_available)
+		person_self = models.Person.objects.get(id=int(request.POST['id']))
+		account = models.Account.objects.get(fk_person=person_self)
+		request_loans = models.Request_Loans.objects.get(fk_person__id=int(request.POST['user_id']), state=True)
+		person = models.Person.objects.get(id=int(request.POST['user_id']))
+		friends = models.Friend.objects.get(fk_person__id=int(request.POST['id']), fk_person_friend__id=int(request.POST['user_id']), state=1)
 		
-			response['amount_available'] = request_loans.amount_available
-			response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
-			
-
-	print('amount_request_bar: '+str(response['amount_request_bar']))		
+		response['user_id'] = person.id
+		response['loan_id'] = models.Friends_Loans.objects.get(fk_friends=friends, fk_request_loans=request_loans).id
+		response['fullname'] = str(person.name).capitalize()+" "+str(person.lastname).capitalize()
+		response['comment'] = request_loans.commentary
+		response['description'] = person.description
+		response['date_expiration'] = str(request_loans.date_expiration.year)+'-'+str(request_loans.date_expiration.month)+'-'+str(request_loans.date_expiration.day)
+		response['date_return'] = request_loans.date_return
+		response['date_create'] = str(request_loans.date_create.year)+'-'+str(request_loans.date_create.month)+'-'+str(request_loans.date_create.day)
+		response['interest'] = request_loans.interest
+		response['invertors'] = len(models.Friends_Loans.objects.filter(fk_request_loans=request_loans, state=True))
+		response['amount_request'] = request_loans.amount_request
+		if account.amount_available >= request_loans.amount_request - request_loans.amount_available:
+			response['amount_request_bar'] = int(request_loans.amount_request- request_loans.amount_available)
+		else:
+			response['amount_request_bar'] = int(account.amount_available)
+	
+		response['amount_available'] = request_loans.amount_available
+		response['deadline'] = str(request_loans.deadline.year)+'-'+str(request_loans.deadline.month)+'-'+str(request_loans.deadline.day)
+		print('amount_request_bar: '+str(response['amount_request_bar']))		
+	
 	return HttpResponse(json.dumps(response), 'content-type/json')
 
 @csrf_exempt
@@ -858,9 +887,9 @@ def viewAmountMarket(request):
 			print('menor amount')
 
 		if num_end < len(models.Request_Loans.objects.all()):
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:num_end]
 		else:
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:]
 		
 		for request_loan in requests_loans:
 			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
@@ -880,6 +909,9 @@ def viewAmountMarket(request):
 					data['amount_request'] = friends_loans.fk_request_loans.amount_request
 					data['amount_available'] = friends_loans.fk_request_loans.amount_available
 					data['interest'] = friends_loans.fk_request_loans.interest
+					
+					days = datetime(request_loan.date_expiration.year, request_loan.date_expiration.month, request_loan.date_expiration.day) - datetime.now()
+					data['days_finally'] = days.days
 					response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
@@ -902,9 +934,9 @@ def viewInterestMarket(request):
 			print('menor interest')
 
 		if num_end < len(models.Request_Loans.objects.all()):
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:num_end]
 		else:
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:]
 		
 		for request_loan in requests_loans:
 			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
@@ -924,6 +956,8 @@ def viewInterestMarket(request):
 					data['amount_request'] = friends_loans.fk_request_loans.amount_request
 					data['amount_available'] = friends_loans.fk_request_loans.amount_available
 					data['interest'] = friends_loans.fk_request_loans.interest
+					days = datetime(request_loan.date_expiration.year, request_loan.date_expiration.month, request_loan.date_expiration.day) - datetime.now()
+					data['days_finally'] = days.days
 					response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
@@ -946,9 +980,9 @@ def viewDeadlineMarket(request):
 			print('menor deadline')
 
 		if num_end < len(models.Request_Loans.objects.all()):
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:num_end]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:num_end]
 		else:
-			requests_loans = models.Request_Loans.objects.all().order_by(tipo)[num_ini:]
+			requests_loans = models.Request_Loans.objects.filter(state=True).order_by(tipo)[num_ini:]
 		
 		for request_loan in requests_loans:
 			for friend in models.Friend.objects.filter(fk_person=int(request.POST['id']), state=1):
@@ -968,6 +1002,8 @@ def viewDeadlineMarket(request):
 					data['amount_request'] = friends_loans.fk_request_loans.amount_request
 					data['amount_available'] = friends_loans.fk_request_loans.amount_available
 					data['interest'] = friends_loans.fk_request_loans.interest
+					days = datetime(request_loan.date_expiration.year, request_loan.date_expiration.month, request_loan.date_expiration.day) - datetime.now()
+					data['days_finally'] = days.days
 					response['users'].append(data)
 
 	return HttpResponse(json.dumps(response), 'content-type/json')
