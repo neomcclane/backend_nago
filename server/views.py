@@ -16,8 +16,14 @@ import random
 import json
 import sys
 import os
+import dwollav2
 
 NUM_CODE = 4
+
+# Navigate to https://www.dwolla.com/applications (production) or https://dashboard-uat.dwolla.com/applications (Sandbox) for your application key and secret.
+APP_KEY = '6cZg5joGComrIg3orR8bOMDK9H6GhlmCdUIK8p3mtJyRYWq0Hf'
+APP_SECRET = 'gy8kylCejScwP6vUxYOhAc5e6ckW1UdsOWRKobtFCBQRYGEWRB'
+ACCESS_TOKEN = 'cslYzJHSstiW1e3n6BszkKxkSXO7BgHlUdhrYqywr5iNlSU2to'
 
 def method_post(funcion):
 	def decorador(*args, **kwargs):
@@ -166,6 +172,23 @@ def updateLoansProcess(request_loans):
 @method_post
 def register(request):
 	response = False
+	client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox') # optional - defaults to production
+
+	app_token = client.Auth.client()
+	customers = app_token.get('customers', {'limit': 10})
+	request_body = {
+		'firstName': str(request.POST['name']).capitalize(),
+		'lastName': str(request.POST['lastname']).capitalize(),
+		'email': str(request.POST['email']).capitalize()
+	}
+
+	# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+	account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
+	customer = account_token.post('customers', request_body)
+	customer.headers['location'] 
+
+	raise Http404
+
 	if validate_args(request, 'name', 'lastname','username', 'email', 'password', 'app') and not exist_username(request.POST['username']): #and (not exist_email(request.POST['email']))
 		try:
 			
@@ -193,6 +216,7 @@ def register(request):
 			person.save()
 			account = models.Account(fk_person=person, amount_available=float(2000), amount_locked=float(0), amount_invested=float(0))
 			account.save()
+			
 			response = True
 		except Exception as e:
 			# response = 'false'
