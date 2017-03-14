@@ -23,7 +23,7 @@ NUM_CODE = 4
 # Navigate to https://www.dwolla.com/applications (production) or https://dashboard-uat.dwolla.com/applications (Sandbox) for your application key and secret.
 APP_KEY = '6cZg5joGComrIg3orR8bOMDK9H6GhlmCdUIK8p3mtJyRYWq0Hf'
 APP_SECRET = 'gy8kylCejScwP6vUxYOhAc5e6ckW1UdsOWRKobtFCBQRYGEWRB'
-ACCESS_TOKEN = 'c1euAL4FIjyOdyi5f3kixIlEDSoiSXn2yTwyxwYZEXMQcYjkoX'
+ACCESS_TOKEN = 'jYIHega8EQMnihSWL1v95euz1vqMAUSGDZcRx02RFY2yqeNyWi'
 
 def method_post(funcion):
 	def decorador(*args, **kwargs):
