@@ -23,7 +23,7 @@ NUM_CODE = 4
 # Navigate to https://www.dwolla.com/applications (production) or https://dashboard-uat.dwolla.com/applications (Sandbox) for your application key and secret.
 APP_KEY = '6cZg5joGComrIg3orR8bOMDK9H6GhlmCdUIK8p3mtJyRYWq0Hf'
 APP_SECRET = 'gy8kylCejScwP6vUxYOhAc5e6ckW1UdsOWRKobtFCBQRYGEWRB'
-ACCESS_TOKEN = 'cslYzJHSstiW1e3n6BszkKxkSXO7BgHlUdhrYqywr5iNlSU2to'
+ACCESS_TOKEN = 'c1euAL4FIjyOdyi5f3kixIlEDSoiSXn2yTwyxwYZEXMQcYjkoX'
 
 def method_post(funcion):
 	def decorador(*args, **kwargs):
@@ -172,23 +172,7 @@ def updateLoansProcess(request_loans):
 @method_post
 def register(request):
 	response = False
-	client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox') # optional - defaults to production
-
-	app_token = client.Auth.client()
-	customers = app_token.get('customers', {'limit': 10})
-	request_body = {
-		'firstName': str(request.POST['name']).capitalize(),
-		'lastName': str(request.POST['lastname']).capitalize(),
-		'email': str(request.POST['email']).capitalize()
-	}
-
-	# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
-	account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
-	customer = account_token.post('customers', request_body)
-	customer.headers['location'] 
-
-	raise Http404
-
+	
 	if validate_args(request, 'name', 'lastname','username', 'email', 'password', 'app') and not exist_username(request.POST['username']): #and (not exist_email(request.POST['email']))
 		try:
 			
@@ -214,12 +198,29 @@ def register(request):
 				person.img_profile = '/profile/user.png'
 
 			person.save()
-			account = models.Account(fk_person=person, amount_available=float(2000), amount_locked=float(0), amount_invested=float(0))
-			account.save()
 			
+			
+
+			client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox') # optional - defaults to production
+
+			app_token = client.Auth.client()
+			customers = app_token.get('customers', {'limit': 10})
+			request_body = {
+				'firstName': str(request.POST['name']).capitalize(),
+				'lastName': str(request.POST['lastname']).capitalize(),
+				'email': str(request.POST['email']).capitalize()
+			}
+
+			# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+			account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
+			customer = account_token.post('customers', request_body)
+			
+			account = models.Account(fk_person=person, amount_available=float(2000), amount_locked=float(0), amount_invested=float(0))
+			account.customer_dwolla = str(customer.headers['location'])
+			account.save()
+
 			response = True
 		except Exception as e:
-			# response = 'false'
 			print('Error: '+str(e))
 			response = False
 		
@@ -256,6 +257,7 @@ def login(request):
 		response['locked'] = account.amount_locked
 		response['invest'] = account.amount_invested
 		response['available'] = account.amount_available
+		response['customer_dwolla'] = account.customer_dwolla
 		response['num_visit'] = person.num_visit
 		
 		person.num_visit += 1
@@ -1190,3 +1192,40 @@ def validatePin(request):
 		print('entro')
 		
 	return HttpResponse(json.dumps(response), content_type='applicaction/json')
+@csrf_exempt
+@method_post
+def checkInUser(request):
+	response = False
+
+	print('id--> '+str(request.POST['id']))
+	
+	if validate_args(request, 'id' ,'customer_dwolla', 'type', 'number_aba', 'amount', 'account_number', 'app') and exist_id_person(int(request.POST['id'])):
+		print('customer_dwolla: '+str(request.POST['customer_dwolla']))
+		print('number_aba: '+str(request.POST['number_aba']))
+		print('amount: '+str(request.POST['amount']))
+		print('account_number: '+str(request.POST['account_number']))
+		print('type: '+str(request.POST['type']))
+
+		person = models.Person.objects.get(id=int(request.POST['id']))
+		account = models.Account.objects.get(fk_person=person)
+		client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox')
+		
+		request_body = {
+		'routingNumber': str(request.POST['number_aba']),
+		'accountNumber': str(request.POST['account_number']),
+		'type': str(request.POST['type']),
+		'name': str(person.name).capitalize()+' - '+str(person.lastname).capitalize()
+		}
+
+		account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
+		# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+		customer = account_token.post('%s/funding-sources' % account.customer_dwolla, request_body)
+		source = customer.headers['location'] # => 'https://api-uat.dwolla.com/funding-sources/375c6781-2a17-476c-84f7-db7d2f6ffb31'
+
+
+
+		
+
+		response = True
+		
+	return HttpResponse(json.dumps(response), 'application/json')

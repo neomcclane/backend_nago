@@ -69,5 +69,6 @@ class Notification(models.Model):
 class Account(models.Model):
 	amount_available = models.FloatField(null=False, blank=False) 
 	amount_locked = models.FloatField(null=False, blank=False) 
-	amount_invested = models.FloatField(null=False, blank=False) 
+	amount_invested = models.FloatField(null=False, blank=False)
+	customer_dwolla = models.TextField(null=True, blank=True)
 	fk_person = models.ForeignKey(Person, null=False, blank=False)

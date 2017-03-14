@@ -38,6 +38,7 @@ urlpatterns = [
     url(r'^viewInvestedAccount/', views.viewInvestedAccount, name='viewInvestedAccount'),
     url(r'^viewRequestdUser/', views.viewRequestdUser, name='viewRequestdUser'),
     url(r'^viewInvestedUser/', views.viewInvestedUser, name='viewInvestedUser'),
+    url(r'^checkInUser/', views.checkInUser, name='checkInUser'),
     
 
 
