@@ -23,7 +23,7 @@ NUM_CODE = 4
 # Navigate to https://www.dwolla.com/applications (production) or https://dashboard-uat.dwolla.com/applications (Sandbox) for your application key and secret.
 APP_KEY = '6cZg5joGComrIg3orR8bOMDK9H6GhlmCdUIK8p3mtJyRYWq0Hf'
 APP_SECRET = 'gy8kylCejScwP6vUxYOhAc5e6ckW1UdsOWRKobtFCBQRYGEWRB'
-ACCESS_TOKEN = 'jYIHega8EQMnihSWL1v95euz1vqMAUSGDZcRx02RFY2yqeNyWi'
+ACCESS_TOKEN = 'jvpDbIL8DCFqYnyDkWBABFtnGT058YyqhyVCzNiSllgW4nBXyf'
 
 def method_post(funcion):
 	def decorador(*args, **kwargs):
@@ -172,23 +172,10 @@ def updateLoansProcess(request_loans):
 @method_post
 def register(request):
 	response = False
-	
+	account = None
 	if validate_args(request, 'name', 'lastname','username', 'email', 'password', 'app') and not exist_username(request.POST['username']): #and (not exist_email(request.POST['email']))
 		try:
-			
 			pin = code_generator(NUM_CODE)
-			# ------------------
-			subject = 'no-reply@gmail.com'
-			text_content = '...'
-			html_content = '<h2>Code: </h2>'+pin
-			from_email = 'correo@centronaturistamandalacangas.com'
-			to = request.POST['email'].lower()
-			# to = request.POST['email'].lower()
-			msg = EmailMultiAlternatives(subject, text_content, from_email, [to])
-			msg.attach_alternative(html_content, "text/html")
-			msg.send()
-			# ------------------
-
 			root = User.objects.create_user(username=request.POST['username'], password=request.POST['password'], email=request.POST['email'].lower())
 			root.save()
 			person = models.Person(fk_user=root, name=request.POST['name'], lastname=request.POST['lastname'], num_visit=0, pin=pin)
@@ -199,8 +186,6 @@ def register(request):
 
 			person.save()
 			
-			
-
 			client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox') # optional - defaults to production
 
 			app_token = client.Auth.client()
@@ -219,11 +204,27 @@ def register(request):
 			account.customer_dwolla = str(customer.headers['location'])
 			account.save()
 
+			# ------------------
+			subject = 'no-reply@gmail.com'
+			text_content = '...'
+			html_content = '<h2>Code: </h2>'+pin
+			from_email = 'correo@centronaturistamandalacangas.com'
+			to = request.POST['email'].lower()
+			# to = request.POST['email'].lower()
+			msg = EmailMultiAlternatives(subject, text_content, from_email, [to])
+			msg.attach_alternative(html_content, "text/html")
+			msg.send()
+			# ------------------
+
 			response = True
 		except Exception as e:
+			if account is not None:
+				account.delete()
+			person.delete()
+			root.delete()
 			print('Error: '+str(e))
 			response = False
-		
+				
 	return HttpResponse(json.dumps(response), content_type='application/json')
 
 @csrf_exempt
@@ -1196,8 +1197,6 @@ def validatePin(request):
 @method_post
 def checkInUser(request):
 	response = False
-
-	print('id--> '+str(request.POST['id']))
 	
 	if validate_args(request, 'id' ,'customer_dwolla', 'type', 'number_aba', 'amount', 'account_number', 'app') and exist_id_person(int(request.POST['id'])):
 		print('customer_dwolla: '+str(request.POST['customer_dwolla']))
@@ -1208,24 +1207,40 @@ def checkInUser(request):
 
 		person = models.Person.objects.get(id=int(request.POST['id']))
 		account = models.Account.objects.get(fk_person=person)
-		client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox')
 		
-		request_body = {
-		'routingNumber': str(request.POST['number_aba']),
-		'accountNumber': str(request.POST['account_number']),
-		'type': str(request.POST['type']),
-		'name': str(person.name).capitalize()+' - '+str(person.lastname).capitalize()
-		}
-
-		account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
-		# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
-		customer = account_token.post('%s/funding-sources' % account.customer_dwolla, request_body)
-		source = customer.headers['location'] # => 'https://api-uat.dwolla.com/funding-sources/375c6781-2a17-476c-84f7-db7d2f6ffb31'
-
-
-
+		try:
+			client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox')
 		
+			request_body = {
+			'routingNumber': str(request.POST['number_aba']),
+			'accountNumber': str(request.POST['account_number']),
+			'type': str(request.POST['type']),
+			'name': str(person.name).capitalize()+' - '+str(person.lastname).capitalize()
+			}
 
-		response = True
+			account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
+			# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+			customer = account_token.post('%s/funding-sources' % account.customer_dwolla, request_body)
+			source = customer.headers['location'] # => 'https://api-uat.dwolla.com/funding-sources/375c6781-2a17-476c-84f7-db7d2f6ffb31'
+		except Exception as e:
+			print('\n----------------------------------------\n')
+			print(e)
+			print('\n----------------------------------------\n')
+			response = False
+		
+		else:
+			response = True
 		
 	return HttpResponse(json.dumps(response), 'application/json')
+
+@csrf_exempt
+@method_post
+def checkOutUser(request):
+	print('cash out')
+	print('customer_dwolla: '+str(request.POST['customer_dwolla']))
+	print('number_aba: '+str(request.POST['number_aba']))
+	print('amount: '+str(request.POST['amount']))
+	print('account_number: '+str(request.POST['account_number']))
+	print('type: '+str(request.POST['type']))
+
+	return HttpResponse(json.dumps(False), content_type='application/json')
