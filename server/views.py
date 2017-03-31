@@ -23,7 +23,7 @@ NUM_CODE = 4
 # Navigate to https://www.dwolla.com/applications (production) or https://dashboard-uat.dwolla.com/applications (Sandbox) for your application key and secret.
 APP_KEY = '6cZg5joGComrIg3orR8bOMDK9H6GhlmCdUIK8p3mtJyRYWq0Hf'
 APP_SECRET = 'gy8kylCejScwP6vUxYOhAc5e6ckW1UdsOWRKobtFCBQRYGEWRB'
-ACCESS_TOKEN = 'jvpDbIL8DCFqYnyDkWBABFtnGT058YyqhyVCzNiSllgW4nBXyf'
+ACCESS_TOKEN = 'huqnYtuILQEXfU7jMPzEQtdb28dKBBffrGB3rKSBeMdwjzoR0k'
 
 def method_post(funcion):
 	def decorador(*args, **kwargs):
@@ -1209,8 +1209,10 @@ def checkInUser(request):
 		account = models.Account.objects.get(fk_person=person)
 		
 		try:
+			
 			client = dwollav2.Client(key = APP_KEY, secret = APP_SECRET, environment = 'sandbox')
-		
+			client_id = account.customer_dwolla.split('/')[len(account.customer_dwolla.split('/')) - 1]
+			print(client_id)
 			request_body = {
 			'routingNumber': str(request.POST['number_aba']),
 			'accountNumber': str(request.POST['account_number']),
@@ -1219,9 +1221,44 @@ def checkInUser(request):
 			}
 
 			account_token = client.Token(access_token=ACCESS_TOKEN, refresh_token=client.Auth.client())
+
+			
 			# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
-			customer = account_token.post('%s/funding-sources' % account.customer_dwolla, request_body)
+			customer = account_token.post('%s/funding-sources' % request.POST['customer_dwolla'], request_body)
 			source = customer.headers['location'] # => 'https://api-uat.dwolla.com/funding-sources/375c6781-2a17-476c-84f7-db7d2f6ffb31'
+			
+			root = account_token.get('/')
+			account_url = str(root.body['_links']['account']['href'])
+			# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+			funding_sources = account_token.get('%s/funding-sources' % account_url)
+			funding_id = str(funding_sources.body['_embedded']['funding-sources'][0]['id'])
+			print('id: '+funding_id) # => 'ABC Bank Checking'		
+
+			transfer_request = {
+				'_links': {
+					'source': {
+					'href': 'https://api.dwolla.com/funding-sources/'+str(funding_id)
+					},
+					'destination': {
+					'href': 'https://api.dwolla.com/customers/'+str(client_id)
+					}
+				},
+				'amount': {
+					'currency': 'USD',
+					'value': str(request.POST['amount'])
+				},
+				'metadata': {
+					'customerId': str(client_id),
+					'notes': 'For work completed on Sept. 1, 2015'
+				}
+			}
+
+			# Using dwollav2 - https://github.com/Dwolla/dwolla-v2-python (Recommended)
+			transfer = account_token.post('transfers', transfer_request)
+			transfer.headers['location'] # => 'https://api.dwolla.com/transfers/d76265cd-0951-e511-80da-0aa34a9b2388'
+
+
+			
 		except Exception as e:
 			print('\n----------------------------------------\n')
 			print(e)
